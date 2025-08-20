@@ -38,20 +38,17 @@ jobs:
     
     - name: Deploy to Development Kibana
       env:
-        KIBANA_URL: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_URL }}
-        ES_URL: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_ES_URL }}
-        ES_PASSWORD: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_PASSWORD }}
+        ELASTIC_CLOUD_ID: ${{ secrets.DEV_ELASTIC_CLOUD_ID }}
+        ELASTIC_API_KEY: ${{ secrets.DEV_ELASTIC_API_KEY }}
       run: |
         if [ -d "dac-demo/rules" ] && [ "$(ls -A dac-demo/rules)" ]; then
           echo "Deploying custom rules to Development environment..."
           
-          # Update detection-rules config file with direct URLs (NOT cloud_id to avoid vanity URL issue)
+          # Update detection-rules config file with cloud_id and api_key (the working format)
           cat > .detection-rules-cfg.json << EOF
         {
-          "kibana_url": "${KIBANA_URL}",
-          "elasticsearch_url": "${ES_URL}",
-          "kibana_username": "elastic",
-          "kibana_password": "${ES_PASSWORD}",
+          "cloud_id": "${ELASTIC_CLOUD_ID}",
+          "api_key": "${ELASTIC_API_KEY}",
           "custom_rules_dir": "dac-demo"
         }
         EOF
