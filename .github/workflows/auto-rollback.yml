@@ -1,0 +1,65 @@
+name: Auto Rollback on Failure
+
+on:
+  workflow_run:
+    workflows: ["Deploy Custom Rules to Production"]
+    types: [completed]
+
+jobs:
+  check-and-rollback:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    name: Automatic Rollback on Production Failure
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get previous successful commit
+      id: get_previous
+      run: |
+        # Find the last successful production deployment
+        # This is simplified - in production you'd query workflow runs via API
+        PREVIOUS_COMMIT=$(git log --skip=1 -n 1 --pretty=format:"%H" -- custom-rules/)
+        echo "previous_commit=${PREVIOUS_COMMIT}" >> $$GITHUB_OUTPUT
+        echo "Will rollback to: ${PREVIOUS_COMMIT}"
+
+    - name: Trigger rollback workflow
+      env:
+        GH_TOKEN: ${{ secrets.GH_PAT }}
+      run: |
+        echo "Triggering automatic rollback due to production deployment failure..."
+        
+        # Trigger the rollback workflow
+        gh workflow run rollback-rules.yml \
+          -f environment=production \
+          -f rollback_type=specific_commit \
+          -f commit_sha=${{ steps.get_previous.outputs.previous_commit }}
+        
+        # Create high-priority issue
+        gh issue create \
+          --title "🚨 URGENT: Production deployment failed - Auto rollback initiated" \
+          --body "## Automatic Rollback Triggered
+        
+        ### Alert
+        The production deployment has failed and an automatic rollback has been initiated.
+        
+        ### Failed Deployment
+        - **Workflow Run**: [View Failed Run](${{ github.event.workflow_run.html_url }})
+        - **Failed Commit**: ${{ github.event.workflow_run.head_sha }}
+        
+        ### Rollback Details
+        - **Rolling back to**: ${{ steps.get_previous.outputs.previous_commit }}
+        - **Time**: $$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+        
+        ### Immediate Action Required
+        1. Check the rollback workflow status
+        2. Verify production environment stability
+        3. Investigate the deployment failure
+        4. Fix the issue before attempting re-deployment
+        
+        ---
+        *This is an automated alert. Please respond immediately.*" \
+          --label "urgent,production,rollback,incident"
