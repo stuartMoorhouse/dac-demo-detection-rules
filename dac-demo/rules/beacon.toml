@@ -1,13 +1,13 @@
 [metadata]
-creation_date = "2025/08/20"
+creation_date = "2025/08/21"
 integration = []
 maturity = "development"
-updated_date = "2025/08/20"
+updated_date = "2025/08/21"
 
 [rule]
 actions = []
 author = ["468064154"]
-description = "beacons"
+description = "beacon"
 enabled = false
 exceptions_list = []
 false_positives = []
@@ -28,13 +28,13 @@ interval = "5m"
 language = "kuery"
 license = ""
 max_signals = 100
-name = "beacons"
+name = "beacon"
 references = []
 related_integrations = []
 required_fields = []
 risk_score = 21
 risk_score_mapping = []
-rule_id = "5849af0e-6e0b-4084-bb14-9847c2466bd2"
+rule_id = "b7095555-0a60-4ecc-8d08-e19226973cdb"
 setup = ""
 severity = "low"
 severity_mapping = []
@@ -44,7 +44,7 @@ to = "now"
 type = "query"
 
 query = '''
-destination.ip : 185.220.101.0/24 or destination.ip : 194.147.78.0/24 or source.ip : 185.220.101.0/24 or source.ip : 194.147.78.0/24
+destination.ip : 185.220.101.0/24 or destination.ip : 194.147.78.0/24
 '''
 
 
