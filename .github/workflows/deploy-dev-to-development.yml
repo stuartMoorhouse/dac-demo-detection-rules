@@ -2,32 +2,31 @@ name: Deploy Dev Branch to Development Environment
 
 on:
   push:
-    branches: [ "dev" ]
-  workflow_dispatch:  # Allow manual triggering
+    branches:
+      - dev
+  workflow_dispatch:
 
 jobs:
-  validate-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     name: Validate and Deploy to Development
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
+      
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-
+    
     - name: Install detection-rules dependencies
       run: |
         python -m pip install --upgrade pip
         pip install .
         pip install lib/kibana
         pip install lib/kql
-
+    
     - name: Set up configuration
       run: |
         # Create detection-rules config file
@@ -36,25 +35,23 @@ jobs:
           "custom_rules_dir": "dac-demo"
         }
         EOF
-
-    - name: Validate all rules
-      run: |
-        echo "Skipping validation due to detection-rules module initialization issue"
-        echo "Proceeding with deployment..."
-
+    
     - name: Deploy to Development Kibana
       env:
-        ELASTIC_CLOUD_ID: ${{ secrets.DEV_ELASTIC_CLOUD_ID }}
-        ELASTIC_API_KEY: ${{ secrets.DEV_ELASTIC_API_KEY }}
+        KIBANA_URL: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_URL }}
+        ES_URL: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_ES_URL }}
+        ES_PASSWORD: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_PASSWORD }}
       run: |
         if [ -d "dac-demo/rules" ] && [ "$(ls -A dac-demo/rules)" ]; then
           echo "Deploying custom rules to Development environment..."
           
-          # Update detection-rules config file with cloud credentials
+          # Update detection-rules config file with direct URLs (NOT cloud_id to avoid vanity URL issue)
           cat > .detection-rules-cfg.json << EOF
         {
-          "cloud_id": "${ELASTIC_CLOUD_ID}",
-          "api_key": "${ELASTIC_API_KEY}",
+          "kibana_url": "${KIBANA_URL}",
+          "elasticsearch_url": "${ES_URL}",
+          "kibana_username": "elastic",
+          "kibana_password": "${ES_PASSWORD}",
           "custom_rules_dir": "dac-demo"
         }
         EOF
@@ -63,14 +60,12 @@ jobs:
           python -m detection_rules kibana --space default import-rules \
             -d dac-demo/rules/ || echo "Note: Some rules may already exist"
           
-          # Clean up config file
-          rm -f .detection-rules-cfg.json
-          
           echo "✅ Development deployment completed successfully!"
         else
-          echo "No custom rules to deploy to Development"
+          echo "No custom rules found in dac-demo/rules/"
+          echo "⚠️ Nothing to deploy"
         fi
-
+    
     - name: Create deployment summary
       if: always()
       run: |
@@ -82,11 +77,7 @@ jobs:
           echo "" >> $$GITHUB_STEP_SUMMARY
           echo "Custom detection rules have been deployed to the Development environment." >> $$GITHUB_STEP_SUMMARY
           echo "" >> $$GITHUB_STEP_SUMMARY
-          echo "- **Environment**: Development" >> $$GITHUB_STEP_SUMMARY
-          echo "- **Branch**: dev" >> $$GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $$GITHUB_STEP_SUMMARY
-          echo "" >> $$GITHUB_STEP_SUMMARY
-          echo "Next steps:" >> $$GITHUB_STEP_SUMMARY
+          echo "**Next Steps:**" >> $$GITHUB_STEP_SUMMARY
           echo "1. Test the rules in the Development environment" >> $$GITHUB_STEP_SUMMARY
           echo "2. Once validated, create a PR from \`dev\` to \`main\` for Production deployment" >> $$GITHUB_STEP_SUMMARY
         else
