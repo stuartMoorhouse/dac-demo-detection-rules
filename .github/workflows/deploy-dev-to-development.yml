@@ -20,44 +20,107 @@ jobs:
       with:
         python-version: '3.12'
     
-    - name: Install detection-rules dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install .
-        pip install lib/kibana
-        pip install lib/kql
-    
-    - name: Set up configuration
-      run: |
-        # Create detection-rules config file
-        cat > .detection-rules-cfg.json << EOF
-        {
-          "custom_rules_dir": "dac-demo"
-        }
-        EOF
+        pip install toml pyyaml
     
     - name: Deploy to Development Kibana
       env:
-        ELASTIC_CLOUD_ID: ${{ secrets.DEV_ELASTIC_CLOUD_ID }}
-        ELASTIC_API_KEY: ${{ secrets.DEV_ELASTIC_API_KEY }}
+        KIBANA_URL: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_URL }}
+        ES_URL: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_ES_URL }}
+        ES_PASSWORD: ${{ secrets.ELASTIC_CLOUD_DEVELOPMENT_PASSWORD }}
       run: |
         if [ -d "dac-demo/rules" ] && [ "$(ls -A dac-demo/rules)" ]; then
           echo "Deploying custom rules to Development environment..."
           
-          # Update detection-rules config file with cloud_id and api_key (the working format)
-          cat > .detection-rules-cfg.json << EOF
-        {
-          "cloud_id": "${ELASTIC_CLOUD_ID}",
-          "api_key": "${ELASTIC_API_KEY}",
-          "custom_rules_dir": "dac-demo"
-        }
-        EOF
+          # First check if detection engine is initialized
+          echo "Checking detection engine status..."
+          DETECTION_ENGINE_STATUS=$(curl -s -u elastic:${ES_PASSWORD} \
+            "${KIBANA_URL}/api/detection_engine/index" \
+            -H "Content-Type: application/json" | python -c "import sys, json; data=json.load(sys.stdin); print('initialized' if 'name' in data else 'not_initialized')")
           
-          # Import rules to Development Kibana
-          python -m detection_rules kibana --space default import-rules \
-            -d dac-demo/rules/ || echo "Note: Some rules may already exist"
+          if [ "$DETECTION_ENGINE_STATUS" != "initialized" ]; then
+            echo "Initializing detection engine..."
+            curl -s -u elastic:${ES_PASSWORD} \
+              -X POST "${KIBANA_URL}/api/detection_engine/index" \
+              -H "kbn-xsrf: true" \
+              -H "Content-Type: application/json"
+            sleep 5
+          fi
           
-          echo "✅ Development deployment completed successfully!"
+          # Convert TOML rules to NDJSON and deploy via curl
+          echo "Converting and deploying rules..."
+          
+          for rule_file in dac-demo/rules/*.toml; do
+            if [ -f "$rule_file" ]; then
+              echo "Processing $rule_file..."
+              
+              # Convert TOML to NDJSON using Python
+              python3 << 'PYTHON_SCRIPT' "$rule_file" > /tmp/rule.ndjson
+import sys
+import toml
+import json
+import uuid
+
+# Read TOML file
+with open(sys.argv[1], 'r') as f:
+    rule_data = toml.load(f)
+
+# Extract rule section
+rule = rule_data.get('rule', {})
+
+# Create NDJSON format
+ndjson_rule = {
+    'id': str(uuid.uuid4()),
+    'rule_id': rule.get('rule_id', f"imported-{uuid.uuid4().hex[:8]}"),
+    'name': rule.get('name', 'Imported Rule'),
+    'description': rule.get('description', ''),
+    'risk_score': rule.get('risk_score', 21),
+    'severity': rule.get('severity', 'low'),
+    'type': rule.get('type', 'query'),
+    'query': rule.get('query', ''),
+    'language': rule.get('language', 'kuery'),
+    'author': rule.get('author', []),
+    'from': rule.get('from', 'now-6m'),
+    'index': rule.get('index', ['logs-*']),
+    'interval': rule.get('interval', '5m'),
+    'max_signals': rule.get('max_signals', 100),
+    'enabled': rule.get('enabled', False),
+    'false_positives': rule.get('false_positives', []),
+    'references': rule.get('references', []),
+    'tags': rule.get('tags', []),
+    'threat': rule.get('threat', [])
+}
+
+# Output as NDJSON
+print(json.dumps(ndjson_rule))
+PYTHON_SCRIPT
+              
+              # Deploy the rule via curl
+              echo "Deploying rule to Development Kibana..."
+              RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -u elastic:${ES_PASSWORD} \
+                -X POST "${KIBANA_URL}/api/detection_engine/rules/_import?overwrite=true" \
+                -H "kbn-xsrf: true" \
+                -H "Content-Type: multipart/form-data" \
+                -F "file=@/tmp/rule.ndjson")
+              
+              HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+              BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS/d')
+              
+              if [ "$HTTP_STATUS" = "200" ]; then
+                echo "✅ Successfully deployed rule from $rule_file"
+                echo "$BODY" | python -m json.tool 2>/dev/null || echo "$BODY"
+              else
+                echo "❌ Failed to deploy rule from $rule_file (HTTP $HTTP_STATUS)"
+                echo "$BODY" | python -m json.tool 2>/dev/null || echo "$BODY"
+              fi
+              
+              rm -f /tmp/rule.ndjson
+            fi
+          done
+          
+          echo "✅ Development deployment completed!"
         else
           echo "No custom rules found in dac-demo/rules/"
           echo "⚠️ Nothing to deploy"
