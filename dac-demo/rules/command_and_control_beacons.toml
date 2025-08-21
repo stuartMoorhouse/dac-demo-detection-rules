@@ -34,24 +34,29 @@ related_integrations = []
 required_fields = []
 risk_score = 21
 risk_score_mapping = []
-rule_id = "b30c5ece-ee8d-471c-b588-b5c57f4fb690"
+rule_id = "16ea249d-f9d8-4d77-ac9a-800ea84b9deb"
 setup = ""
 severity = "low"
 severity_mapping = []
 tags = []
-threat = []
 to = "now"
 type = "query"
 
 query = '''
-destination.ip : (185.220.101.0/24 or 194.147.78.0/24) and 
-(destination.port : 443 or destination.port : 8443) and
-network.protocol : "http" and
-network.bytes < 1024 and
-user_agent.original : (*Chrome* or *Edge*)
+destination.ip : (185.220.101.0/24 or 194.147.78.0/24) and
+(destination.port : 443 or destination.port : 8443) and 
+network.protocol : "http*"
 '''
 
 
+[[rule.threat]]
+framework = "MITRE ATT&CK"
+technique = []
+
+[rule.threat.tactic]
+id = "TA0011"
+name = "Command and Control"
+reference = "https://attack.mitre.org/tactics/TA0011/"
 
 [rule.meta]
 kibana_siem_app_url = "https://elastic-cloud-local.kb.europe-north1.gcp.elastic-cloud.com/app/security"
