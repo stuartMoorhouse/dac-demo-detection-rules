@@ -1,0 +1,58 @@
+[metadata]
+creation_date = "2025/08/21"
+integration = []
+maturity = "development"
+updated_date = "2025/08/21"
+
+[rule]
+actions = []
+author = ["468064154"]
+description = "beacons"
+enabled = true
+exceptions_list = []
+false_positives = []
+filters = []
+from = "now-6m"
+index = [
+    "apm-*-transaction*",
+    "auditbeat-*",
+    "endgame-*",
+    "filebeat-*",
+    "logs-*",
+    "packetbeat-*",
+    "traces-apm*",
+    "winlogbeat-*",
+    "-*elastic-cloud-logs-*",
+]
+interval = "5m"
+language = "kuery"
+license = ""
+max_signals = 100
+name = "beacons"
+references = []
+related_integrations = []
+required_fields = []
+risk_score = 21
+risk_score_mapping = []
+rule_id = "b30c5ece-ee8d-471c-b588-b5c57f4fb690"
+setup = ""
+severity = "low"
+severity_mapping = []
+tags = []
+threat = []
+to = "now"
+type = "query"
+
+query = '''
+destination.ip : (185.220.101.0/24 or 194.147.78.0/24) and 
+(destination.port : 443 or destination.port : 8443) and
+network.protocol : "http" and
+network.bytes < 1024 and
+user_agent.original : (*Chrome* or *Edge*)
+'''
+
+
+
+[rule.meta]
+kibana_siem_app_url = "https://elastic-cloud-local.kb.europe-north1.gcp.elastic-cloud.com/app/security"
+
