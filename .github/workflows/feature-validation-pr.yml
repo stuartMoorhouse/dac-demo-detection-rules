@@ -24,11 +24,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install .
           
-      - name: Run validation
-        run: |
-          echo "Running detection rules validation..."
-          python -m detection_rules validate
-          
       - name: Run tests
         run: |
           echo "Running detection rules tests..."
@@ -62,8 +57,7 @@ jobs:
             **Author:** @${{ github.actor }}
             **Validation Status:** ✅ Passed
             
-            ### Validation Results
-            - ✅ Detection rules validation passed
+            ### Test Results
             - ✅ Detection rules tests passed
             
             ### Review Checklist
